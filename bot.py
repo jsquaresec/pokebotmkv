@@ -74,22 +74,25 @@ async def run_bot() -> None:
     intents.message_content = True
     intents.members = True
 
-    bot = PokeBot(command_prefix=settings.bot_prefix, intents=intents)
+    bot = PokeBot(command_prefix=settings.bot_prefix, intents=intents, case_insensitive=True)
 
     @bot.event
     async def on_ready():
+    main
         await bot.change_presence(
             activity=discord.Game(name="PokeMon"),
             status=discord.Status.online,
         )
+  
+      main
         print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
     @bot.command(name="ping")
     async def ping(ctx: commands.Context):
-        latency_ms = round(bot.latency * 1000)
-        await ctx.send(f"Pong! {latency_ms}ms")
+        await ctx.send("Pong!")
 
     if not settings.discord_token:
         raise RuntimeError("DISCORD_TOKEN is missing. Set it in your .env file.")
 
     await bot.start(settings.discord_token)
+

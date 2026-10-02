@@ -78,6 +78,13 @@ async def run_bot() -> None:
 
     @bot.event
     async def on_ready():
+    main
+        await bot.change_presence(
+            activity=discord.Game(name="PokeMon"),
+            status=discord.Status.online,
+        )
+  
+      main
         print(f"Logged in as {bot.user} (ID: {bot.user.id})")
 
     @bot.command(name="ping")

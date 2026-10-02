@@ -13,7 +13,7 @@ def battle_card(row, notice=None, owner_id=None):
     state = load_battle(row, owner_id)
     if state:
         row.status_effect = state["wild"].get("status")
-    ended = row.status != "open" or row.expires_at <= datetime.utcnow()
+    ended = row.status != "open" or bool(state.get("finished")) or row.expires_at <= datetime.utcnow()
     embed = encounter_card(row, expired=ended)
     if not state and not ended:
         embed.set_field_at(2, name="Wild battle", value="Click **Battle** to send out your party leader, then choose moves or throw a ball.", inline=False)
@@ -21,7 +21,8 @@ def battle_card(row, notice=None, owner_id=None):
         active = state["team"][state["active"]]
         if ended:
             embed.title = {"caught": f'{row.species} caught! +500 gold', "won": "Wild battle won!",
-                           "lost": "Your party fainted", "ran": "Escaped safely"}.get(state.get("result"), "Encounter ended")
+                           "lost": "Your party fainted", "ran": "Escaped safely",
+                           "expired": "Encounter expired"}.get(state.get("result"), "Encounter ended")
             embed.remove_field(1)  # Replace the generic expired-controls message.
             if state.get('result') == 'won' and state.get('gold_reward'):
                 embed.add_field(name="Battle reward", value=f'**+{state["gold_reward"]:,} gold**', inline=False)

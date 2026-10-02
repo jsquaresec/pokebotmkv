@@ -116,8 +116,10 @@ class EncounterCog(commands.Cog):
 
     async def open_encounter(self, interaction, encounter_id=None):
         async with SessionLocal() as session:
-            row = await WildEncounterRepository(session).active_in_channel(interaction.channel_id)
-            if not row or (encounter_id is not None and row.id != encounter_id):
+            repo = WildEncounterRepository(session)
+            row = (await repo.get_active(interaction.channel_id, encounter_id)
+                   if encounter_id is not None else await repo.active_in_channel(interaction.channel_id))
+            if not row:
                 await gui_send(interaction, "There is no active encounter here.", ephemeral=True)
                 return
             view = self.encounter_view(row, interaction.user.id)

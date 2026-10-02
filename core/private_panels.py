@@ -102,14 +102,12 @@ async def deliver(interaction, content=None, **kwargs):
                 if exc.status not in (401, 403, 404):
                     raise
             else:
-                # Remove the new slash-command acknowledgement after reusing the old panel.
-                if not extras.get('gui_ack_deleted') and getattr(interaction.response, 'type', None) != discord.InteractionResponseType.deferred_message_update:
-                    try:
-                        await interaction.delete_original_response()
-                    except discord.NotFound:
-                        pass
-                    extras['gui_ack_deleted'] = True
-                remember(key, message, kwargs.get('view'), touched=panel.touched)
+                # Keep the reused private panel alive. A deferred slash-command
+                # acknowledgement can resolve to the same ephemeral response in
+                # Discord, so deleting the "original response" here can make the
+                # freshly rendered dashboard disappear (notably during trainer
+                # onboarding/profile flows).
+                remember(key, message, kwargs.get('view'))
                 return message
 
         if interaction.response.is_done() and getattr(interaction.response, 'type', None) == discord.InteractionResponseType.deferred_message_update:

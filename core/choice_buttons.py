@@ -30,10 +30,8 @@ class ChoiceButtons(OwnedView):
             async def select(interaction, selected=value):
                 async with self.lock:
                     if self.used or self.is_finished():
-                        await gui_defer(interaction)
                         return
                     self.used = True
-                    await gui_defer(interaction)
                     for child in self.children:
                         child.disabled = True
                     self.stop()

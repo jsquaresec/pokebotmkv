@@ -8,7 +8,7 @@ from battle.wild_engine import WildTurnEngine, effectiveness
 from models import Base, User, PokemonInstance, PartySlot, InventoryItem
 from models.wild_encounter import WildEncounter
 from services.content_registry_v70 import ContentRegistryV70
-from services.wild_battle_service import WildBattleService, load_battle
+from services.wild_battle_service import WildBattleService, load_battle, save_battle
 from services.encounter_v70_service import EncounterV70Service
 from repositories.users import UserRepository
 from repositories.inventory import InventoryRepository
@@ -112,7 +112,7 @@ async def begin(session):
     # Test retaliation with a known damaging move, independent of catalog learnset ordering.
     state = load_battle(row)
     state['wild']['moves'] = [dict(name='Tackle', pp=35, max_pp=35)]
-    row.battle_state_json = json.dumps(state)
+    save_battle(row, 100, state)
     await session.commit()
     return service, row
 
@@ -125,7 +125,7 @@ async def test_battle_turn_persists_both_hp_and_pp(battle_db):
     await battle_db.refresh(row)
     state = load_battle(row)
     mon = await battle_db.get(PokemonInstance, 1)
-    assert state["turn"] == 2 and row.current_hp < 1000
+    assert state["turn"] == 2 and state["wild"]["hp"] < 1000
     assert mon.current_hp < 100 and json.loads(mon.moves_json)[0]["pp"] == 34
     assert state["team"][0]["hp"] == mon.current_hp
     assert load_battle(row)["owner"] == 100
@@ -145,7 +145,8 @@ async def test_catch_rewards_once_and_unlocks_party(battle_db):
     service, row = await begin(battle_db)
     await service.apply(1, 2, 100, "ball", "master_ball", 1)
     await battle_db.commit()
-    assert row.status == "caught"
+    assert row.status == "open"
+    assert load_battle(row, 100)["result"] == "caught"
     assert (await battle_db.get(User, 1)).balance == 1500
     assert not (await battle_db.get(PokemonInstance, 1)).locked
     assert not (await battle_db.get(PokemonInstance, 2)).locked
@@ -177,7 +178,7 @@ async def test_forced_switch_has_no_free_enemy_hit(battle_db):
     service, row = await begin(battle_db)
     state = load_battle(row)
     state["team"][0]["hp"] = 0
-    row.battle_state_json = json.dumps(state)
+    save_battle(row, 100, state)
     (await battle_db.get(PokemonInstance, 1)).current_hp = 0
     await battle_db.commit()
     await service.apply(1, 2, 100, "switch", 1, 1)
@@ -189,7 +190,8 @@ async def test_run_and_expiry_release_party(battle_db):
     service, row = await begin(battle_db)
     await service.apply(1, 2, 100, "run", expected_turn=1)
     await battle_db.commit()
-    assert row.status == "fled" and not (await battle_db.get(PokemonInstance, 1)).locked
+    assert row.status == "open" and load_battle(row, 100)["result"] == "ran"
+    assert not (await battle_db.get(PokemonInstance, 1)).locked
     # Reuse a fresh encounter to verify offline expiry cleanup.
     battle_db.add(WildEncounter(id=2, guild_id=1, channel_id=2, species="Pikachu", level=5,
         current_hp=100, max_hp=100, expires_at=datetime.utcnow()+timedelta(minutes=5)))
@@ -208,19 +210,20 @@ async def test_knockout_awards_xp_and_250_gold_once(battle_db):
     state = load_battle(row)
     state["wild"]["hp"] = 1
     row.current_hp = 1
-    row.battle_state_json = json.dumps(state)
+    save_battle(row, 100, state)
     await battle_db.commit()
     await service.apply(1, 2, 100, "move", "Tackle", 1)
     await battle_db.commit()
-    assert row.status == "defeated"
+    assert row.status == "open"
+    assert load_battle(row, 100)["result"] == "won"
     assert (await battle_db.get(User, 1)).balance == 1250
     assert (await battle_db.get(PokemonInstance, 1)).experience > 1000
     assert not (await battle_db.get(PokemonInstance, 1)).locked
     from core.wild_battle_view import battle_card
-    fields = {field.name: field.value for field in battle_card(row).fields}
+    fields = {field.name: field.value for field in battle_card(row, owner_id=100).fields}
     assert fields['Battle reward'] == '**+250 gold**'
     assert fields['Gold remaining'] == '**1,250 gold**'
-    with pytest.raises(ValueError, match='ended'):
+    with pytest.raises(ValueError, match='Only the trainer'):
         await service.apply(1, 2, 100, 'move', 'Tackle', 1)
     assert (await battle_db.get(User, 1)).balance == 1250
 
@@ -232,7 +235,7 @@ async def test_losing_a_wild_battle_does_not_award_gold(battle_db):
         mon['hp'] = 0
     state['team'][0]['hp'] = 1
     state['wild']['speed'] = 999
-    row.battle_state_json = json.dumps(state)
+    save_battle(row, 100, state)
     await battle_db.commit()
     await service.apply(1, 2, 100, 'move', 'Tackle', 1)
     await battle_db.commit()
@@ -253,8 +256,8 @@ async def test_battle_view_updates_same_card_without_followups(battle_db):
     from gui_fakes import interaction as fake_interaction, message
     interaction = fake_interaction(user_id=100, source=message(owner=100))
     await view.children[0].callback(interaction)
-    interaction.response.defer.assert_awaited_once_with(thinking=False)
-    interaction.edit_original_response.assert_awaited_once()
+    interaction.response.defer.assert_not_awaited()
+    interaction.response.edit_message.assert_awaited_once()
     interaction.followup.send.assert_not_awaited()
     assert "34/35" in view.children[0].label
     embed = battle_card(row)
@@ -273,7 +276,7 @@ async def test_empty_and_completed_cards_render(battle_db):
     await service.apply(1, 2, 100, "ball", "master_ball", 1)
     view = WildBattleView(row, AsyncMock())
     assert all(button.disabled for button in view.children if button.label != 'Home')
-    assert "500 gold" in battle_card(row).title
+    assert "caught" in battle_card(row, owner_id=100).title.lower()
 
 
 @pytest.mark.parametrize('result,status', [('won','defeated'), ('caught','caught'), ('lost','fled'), ('ran','fled'), ('expired','expired')])
@@ -284,7 +287,7 @@ async def test_finished_battle_has_home_only_and_returns_to_private_dashboard(ba
     _, row = await begin(battle_db)
     state = load_battle(row)
     state.update(finished=True, result=result)
-    row.battle_state_json = json.dumps(state)
+    save_battle(row, 100, state)
     row.status = status
     view = WildBattleView(row, AsyncMock(), 100)
     assert len(view.children) == 1

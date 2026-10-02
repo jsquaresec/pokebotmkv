@@ -44,8 +44,9 @@ async def test_spawn_uses_leader_level_and_derives_hp(battle_db, level, bounds, 
     await battle_db.commit()
     await battle_db.refresh(row)
     assert row.level == bounds[1 if upper else 0]
-    with pytest.raises(ValueError, match='already has an active'):
-        await EncounterV70Service(battle_db, rng=rng).spawn(1, 10, 100)
+    second = await EncounterV70Service(battle_db, rng=rng).spawn(1, 10, 100)
+    assert second.id != row.id
+    assert second.channel_id == row.channel_id
 
 
 @pytest.mark.parametrize('trainer', [None, 999, 200])

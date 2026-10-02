@@ -19,9 +19,21 @@ async def test_slash_commands_are_private_and_reuse_existing_panel():
     assert reused is original
     original.edit.assert_awaited_once()
     second.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
-    second.delete_original_response.assert_awaited_once()
+    second.delete_original_response.assert_not_awaited()
     second.followup.send.assert_not_awaited()
     second.response.send_message.assert_not_awaited()
+
+
+async def test_reused_panel_stays_visible_after_new_menu_slash_command():
+    first = interaction()
+    original = await gui_send(first, 'Trainer setup')
+    menu = interaction()
+    reused = await gui_send(menu, 'PokeBot • Adventure Hub')
+    assert reused is original
+    original.edit.assert_awaited_once()
+    menu.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
+    menu.delete_original_response.assert_not_awaited()
+    assert PANELS[key_for(menu)].message is original
 
 
 async def test_multiple_results_do_not_delete_the_panel():

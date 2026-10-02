@@ -18,6 +18,17 @@ class WildEncounterRepository:
             stmt = stmt.with_for_update()
         return (await self.session.execute(stmt)).scalar_one_or_none()
 
+    async def get_active(self, channel_id: int, encounter_id: int, lock: bool = False):
+        stmt = select(WildEncounter).where(
+            WildEncounter.id == encounter_id,
+            WildEncounter.channel_id == channel_id,
+            WildEncounter.status == "open",
+            WildEncounter.expires_at > datetime.utcnow(),
+        )
+        if lock:
+            stmt = stmt.with_for_update()
+        return (await self.session.execute(stmt)).scalar_one_or_none()
+
     async def create(self, **values):
         encounter = WildEncounter(**values)
         self.session.add(encounter)

@@ -79,9 +79,22 @@ class WildBattleService:
         queued = (await self.session.execute(select(QueueEntry.id).where(QueueEntry.discord_id == uid))).scalar_one_or_none()
         if active is not None or queued is not None:
             raise ValueError("Finish your ranked battle or queue before starting a wild battle.")
-        slots = await PartyRepository(self.session).get_party(user.id)
+        party_repo = PartyRepository(self.session)
+        slots = await party_repo.get_party(user.id)
         if not slots:
-            raise ValueError("Set a party with /party_set first.")
+            # Battle is a GUI action, so do not dead-end the player on a slash
+            # command prerequisite. Seed an empty party with their first usable
+            # Pokémon and immediately continue into the battle GUI.
+            first_mon = (await self.session.execute(
+                select(PokemonInstance).where(
+                    PokemonInstance.owner_id == user.id,
+                    PokemonInstance.locked.is_(False),
+                ).order_by(PokemonInstance.id.asc()).limit(1)
+            )).scalar_one_or_none()
+            if first_mon is None:
+                raise ValueError("You have no available Pokémon. Catch one or choose a starter first.")
+            await party_repo.replace_party(user.id, [first_mon.id])
+            slots = await party_repo.get_party(user.id)
         # Lock in ID order, preserving the user's party order in the snapshots.
         mons = {}
         for pid in sorted(slot.pokemon_id for slot in slots):

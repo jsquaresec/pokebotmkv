@@ -102,7 +102,7 @@ async def deliver(interaction, content=None, **kwargs):
         # A cached ephemeral panel may have been dismissed client-side while its
         # webhook message remains editable, which otherwise leaves Discord's
         # acknowledgement stuck on "thinking" with no visible dashboard.
-        panel = None if extras.get("gui_force_new_panel") else PANELS.get(key)
+        panel = None if (extras.get("gui_force_new_panel") or extras.get("gui_force_private_panel")) else PANELS.get(key)
         if panel is not None and monotonic() - panel.touched < TOKEN_LIFETIME:
             await defer(interaction)
             try:

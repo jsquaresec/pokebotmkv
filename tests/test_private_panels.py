@@ -120,8 +120,8 @@ async def test_choice_to_receipt_uses_one_message_and_is_single_use():
     await asyncio.gather(*(button.callback(click) for click in clicks))
     action.assert_awaited_once()
     assert sum(click.response.defer.await_count for click in clicks) == 1
-    # One edit disables the single-use choice; the second renders the receipt.
-    assert panel.message.edit.await_count == 2
+    assert sum(click.response.edit_message.await_count for click in clicks) == 1
+    assert panel.message.edit.await_count == 0
     for click in clicks:
         click.followup.send.assert_not_awaited()
         click.response.send_message.assert_not_awaited()
@@ -199,7 +199,8 @@ async def test_encounter_loader_does_not_show_another_trainers_battle_data():
     cog = object.__new__(EncounterCog)
     with patch('cogs.encounters.SessionLocal', return_value=session), patch('cogs.encounters.WildEncounterRepository') as repo:
         repo.return_value.get_active = AsyncMock(return_value=row)
-        cog.encounter_view = MagicMock(return_value=None)
+        view = MagicMock()
+        cog.encounter_view = MagicMock(return_value=view)
         await cog.open_encounter(click, 42)
     embed = click.response.send_message.call_args.kwargs['embeds'][0]
     assert '987654' not in embed.description

@@ -9,8 +9,8 @@ from services.wild_battle_service import load_battle
 from core.game_gui import OwnedView, ResultView, dashboard, gui_defer, gui_send
 
 
-def battle_card(row, notice=None):
-    state = load_battle(row)
+def battle_card(row, notice=None, owner_id=None):
+    state = load_battle(row, owner_id)
     if state:
         row.status_effect = state["wild"].get("status")
     ended = row.status != "open" or row.expires_at <= datetime.utcnow()
@@ -53,7 +53,7 @@ class WildBattleView(OwnedView):
 
     def render(self):
         self.clear_items()
-        state = load_battle(self.row)
+        state = load_battle(self.row, self.owner_id)
         ended = self.row.status != "open" or bool(state.get("finished")) or self.row.expires_at <= datetime.utcnow()
         turn = state.get("turn", 0)
         if ended:
@@ -72,9 +72,9 @@ class WildBattleView(OwnedView):
                     try:
                         self.row = await self.action(interaction, self.row.id, kind, value, turn)
                         self.render()
-                        await gui_send(interaction, embed=battle_card(self.row), view=self)
+                        await gui_send(interaction, embed=battle_card(self.row, owner_id=self.owner_id), view=self)
                     except ValueError as exc:
-                        await gui_send(interaction, embed=battle_card(self.row, str(exc)), view=self)
+                        await gui_send(interaction, embed=battle_card(self.row, str(exc), self.owner_id), view=self)
             button.callback = callback
             self.add_item(button)
 
@@ -101,13 +101,13 @@ class WildBattleView(OwnedView):
         self.button("Home", dashboard, row=3)
 
     async def on_timeout(self):
-        if self.row.status != 'open' or load_battle(self.row).get('finished'):
+        if self.row.status != 'open' or load_battle(self.row, self.owner_id).get('finished'):
             await super().on_timeout()
             return
         if self.message:
             try:
                 home = ResultView(self.owner_id)
-                message = await self.message.edit(embed=battle_card(self.row, "Encounter expired. Click Home to return to your menu."), view=home)
+                message = await self.message.edit(embed=battle_card(self.row, "Encounter expired. Click Home to return to your menu.", self.owner_id), view=home)
                 home.message = message
                 from core.private_panels import PANELS, remember
                 for key, panel in list(PANELS.items()):
@@ -120,7 +120,7 @@ class WildBattleView(OwnedView):
         logging.getLogger(__name__).error("Wild battle action failed", exc_info=(type(error), error, error.__traceback__))
         await gui_defer(interaction)
         try:
-            await gui_send(interaction, embed=battle_card(self.row, "The turn failed. Reopen /encounter to refresh."), view=self)
+            await gui_send(interaction, embed=battle_card(self.row, "The turn failed. Reopen /encounter to refresh.", self.owner_id), view=self)
         except discord.HTTPException:
             pass
 

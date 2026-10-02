@@ -61,14 +61,15 @@ class EncounterV70Service:
             expires_at=datetime.utcnow() + timedelta(seconds=settings.encounter_ttl_seconds),
         )
 
-    def catch_probability(self, encounter, ball_sku: str) -> float:
+    def catch_probability(self, encounter, ball_sku: str, current_hp: int | None = None) -> float:
         if ball_sku not in BALLS:
             raise ValueError("Unknown Poké Ball.")
         if ball_sku == "master_ball":
             return 1.0
         species = self.registry.species(encounter.species)
         # Reward weakening: 0.35x at full HP, increasing toward 2x near zero HP.
-        hp_ratio = max(0.0, min(1.0, encounter.current_hp / max(1, encounter.max_hp)))
+        hp = encounter.current_hp if current_hp is None else current_hp
+        hp_ratio = max(0.0, min(1.0, hp / max(1, encounter.max_hp)))
         hp_factor = 0.35 + 1.65 * (1.0 - hp_ratio)
         status_bonus = 1.5 if getattr(encounter, "status_effect", None) else 1.0
         return min(0.95, max(0.03, species["catch_rate"] / 255 * hp_factor * BALLS[ball_sku] * status_bonus))
@@ -86,14 +87,17 @@ class EncounterV70Service:
         return encounter
 
     async def attempt_catch(self, channel_id: int, discord_id: int, ball_sku: str, user_repo, inventory_repo,
-                            encounter_id: int | None = None, battle_turn: bool = False):
+                            encounter_id: int | None = None, battle_turn: bool = False, battle_state=None):
         encounter = await self.repo.active_in_channel(channel_id, lock=True)
         if not encounter:
             raise ValueError("There is no active encounter in this channel.")
         if encounter_id is not None and encounter.id != encounter_id:
             raise ValueError("That encounter has ended. Use the newest spawn's buttons.")
-        battle = json.loads(getattr(encounter, "battle_state_json", "{}") or "{}")
-        if battle and (not battle_turn or battle.get("owner") != discord_id or battle.get("finished")):
+        battle = battle_state
+        if battle_turn:
+            if not battle or battle.get("owner") != discord_id or battle.get("finished"):
+                raise ValueError("Use the ball buttons in your wild battle.")
+        elif json.loads(getattr(encounter, "battle_state_json", "{}") or "{}"):
             raise ValueError("Use the ball buttons in your wild battle.")
         user = await user_repo.get_by_discord_id_locked(discord_id)
         if not user:
@@ -102,7 +106,8 @@ class EncounterV70Service:
         if not item or item.quantity < 1:
             raise ValueError(f"You do not have a {ball_sku}.")
         item.quantity -= 1
-        caught = self.rng.random() <= self.catch_probability(encounter, ball_sku)
+        battle_hp = battle["wild"]["hp"] if battle_turn and battle else None
+        caught = self.rng.random() <= self.catch_probability(encounter, ball_sku, battle_hp)
         if not caught:
             await self.session.flush()
             return None
@@ -111,7 +116,7 @@ class EncounterV70Service:
         traits = PokemonTraitsService(self.rng).roll(types, data)
         mon = PokemonInstance(
             owner_id=user.id, species=encounter.species, dex_number=data["dex_number"], level=encounter.level,
-            current_hp=encounter.current_hp, max_hp=encounter.max_hp,
+            current_hp=battle_hp if battle_hp is not None else encounter.current_hp, max_hp=encounter.max_hp,
             attack=data["base_attack"] + encounter.level, defense=data["base_defense"] + encounter.level,
             speed=data["base_speed"] + encounter.level, primary_type=types[0],
             secondary_type=types[1] if len(types) > 1 else None,
@@ -122,8 +127,9 @@ class EncounterV70Service:
         )
         MovesetV80Service().initialize(mon, self.registry)
         self.session.add(mon)
-        encounter.status = "caught"
-        encounter.claimed_by_discord_id = discord_id
+        if not battle_turn:
+            encounter.status = "caught"
+            encounter.claimed_by_discord_id = discord_id
         user.balance += CATCH_GOLD_REWARD
         from services.daily_mission_service import DailyMissionService
         await DailyMissionService(self.session).record(discord_id, 'catch')

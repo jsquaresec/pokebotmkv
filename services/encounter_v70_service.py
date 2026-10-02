@@ -48,8 +48,6 @@ class EncounterV70Service:
         return self.rng.randint(max(1, center - self.LEVEL_VARIATION), min(100, center + self.LEVEL_VARIATION))
 
     async def spawn(self, guild_id: int, channel_id: int, trainer_discord_id: int | None = None):
-        if await self.repo.active_in_channel(channel_id):
-            raise ValueError("This channel already has an active encounter.")
         name = self.rng.choice(self.registry.all_species())
         species = self.registry.species(name)
         level = await self.spawn_level(trainer_discord_id)
@@ -75,11 +73,10 @@ class EncounterV70Service:
         return min(0.95, max(0.03, species["catch_rate"] / 255 * hp_factor * BALLS[ball_sku] * status_bonus))
 
     async def attack(self, channel_id: int, damage: int, encounter_id: int | None = None):
-        encounter = await self.repo.active_in_channel(channel_id, lock=True)
+        encounter = (await self.repo.get_active(channel_id, encounter_id, lock=True)
+                     if encounter_id is not None else await self.repo.active_in_channel(channel_id, lock=True))
         if not encounter:
-            raise ValueError("There is no active encounter in this channel.")
-        if encounter_id is not None and encounter.id != encounter_id:
-            raise ValueError("That encounter has ended. Use the newest spawn's buttons.")
+            raise ValueError("That encounter has ended." if encounter_id is not None else "There is no active encounter in this channel.")
         if json.loads(getattr(encounter, "battle_state_json", "{}") or "{}"):
             raise ValueError("Use the battle's move buttons to attack.")
         encounter.current_hp = max(1, encounter.current_hp - max(1, min(damage, 50)))
@@ -88,11 +85,10 @@ class EncounterV70Service:
 
     async def attempt_catch(self, channel_id: int, discord_id: int, ball_sku: str, user_repo, inventory_repo,
                             encounter_id: int | None = None, battle_turn: bool = False, battle_state=None):
-        encounter = await self.repo.active_in_channel(channel_id, lock=True)
+        encounter = (await self.repo.get_active(channel_id, encounter_id, lock=True)
+                     if encounter_id is not None else await self.repo.active_in_channel(channel_id, lock=True))
         if not encounter:
-            raise ValueError("There is no active encounter in this channel.")
-        if encounter_id is not None and encounter.id != encounter_id:
-            raise ValueError("That encounter has ended. Use the newest spawn's buttons.")
+            raise ValueError("That encounter has ended." if encounter_id is not None else "There is no active encounter in this channel.")
         battle = battle_state
         if battle_turn:
             if not battle or battle.get("owner") != discord_id or battle.get("finished"):

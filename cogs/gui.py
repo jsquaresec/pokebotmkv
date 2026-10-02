@@ -13,6 +13,7 @@ class GuiCog(commands.Cog):
         # directly. Deferring with thinking=True here can leave Discord's
         # "Bot is thinking..." placeholder behind when an older private panel
         # is being reused or was manually dismissed.
+        interaction.extras["gui_force_new_panel"] = True
         await dashboard(interaction)
 
     @menu.error

@@ -1,0 +1,23 @@
+PokeBot complete updated project - October 1, 2026
+
+Includes progressive daily gold check-ins and Easy/Medium/Hard daily missions.
+Daily gold: 1,000 initially, +100 per consecutive UTC day, capped at 10,000.
+Daily missions award random items, track gameplay, and include private claim buttons.
+
+Your private .env file is intentionally not included. Keep your existing .env
+when updating, or copy .env.example to .env and configure it for a new install.
+
+Existing installation:
+1. Back up your existing project and database.
+2. Extract these files into your existing PokeBot folder, replacing project files.
+3. Keep your existing .env and Docker database volume.
+4. In PowerShell from the PokeBot folder, run:
+   docker compose up -d --build bot
+5. Check startup with:
+   docker compose logs --tail 80 migrator bot
+
+Docker Compose runs the included database migrations before starting the bot.
+Do not use docker compose down -v: that deletes the database volume.
+
+Open /menu > Daily & Seasons for Daily Checkin and Daily Missions.
+This ZIP contains source code, not your live database or an executable.

@@ -1,0 +1,36 @@
+{
+  "week_1_kanto_starters": [
+    "Bulbasaur",
+    "Charmander",
+    "Squirtle"
+  ],
+  "week_2_psychic_focus": [
+    "Abra",
+    "Kadabra",
+    "Alakazam",
+    "Drowzee",
+    "Hypno",
+    "Mr. Mime",
+    "Mewtwo",
+    "Mew"
+  ],
+  "week_3_water_rush": [
+    "Squirtle",
+    "Wartortle",
+    "Blastoise",
+    "Psyduck",
+    "Golduck",
+    "Lapras",
+    "Magikarp",
+    "Gyarados",
+    "Staryu",
+    "Starmie"
+  ],
+  "week_4_legends": [
+    "Articuno",
+    "Zapdos",
+    "Moltres",
+    "Mewtwo",
+    "Mew"
+  ]
+}

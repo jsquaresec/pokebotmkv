@@ -1,0 +1,15 @@
+{
+  "common": [
+    "Pidgey",
+    "Rattata",
+    "Caterpie",
+    "Weedle"
+  ],
+  "uncommon": [
+    "Eevee",
+    "Oddish"
+  ],
+  "rare": [
+    "Pikachu"
+  ]
+}

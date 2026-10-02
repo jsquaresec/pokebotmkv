@@ -1,0 +1,56 @@
+[
+  {
+    "sku": "poke_ball",
+    "name": "Pok\u00e9 Ball",
+    "price": 100,
+    "description": "Basic capture item"
+  },
+  {
+    "sku": "great_ball",
+    "name": "Great Ball",
+    "price": 300,
+    "description": "1.5x catch modifier"
+  },
+  {
+    "sku": "ultra_ball",
+    "name": "Ultra Ball",
+    "price": 700,
+    "description": "2x catch modifier"
+  },
+  {
+    "sku": "master_ball",
+    "name": "Master Ball",
+    "price": 50000,
+    "description": "Guaranteed catch"
+  },
+  {
+    "sku": "potion",
+    "name": "Potion",
+    "price": 150,
+    "description": "Heals a Pok\u00e9mon"
+  },
+  {
+    "sku": "super_potion",
+    "name": "Super Potion",
+    "price": 300,
+    "description": "Heals more HP"
+  },
+  {
+    "sku": "max_potion",
+    "name": "Max Potion",
+    "price": 1200,
+    "description": "Fully restores HP"
+  },
+  {
+    "sku": "rare_candy",
+    "name": "Rare Candy",
+    "price": 2500,
+    "description": "Raises a Pokémon by one level"
+  },
+  {
+    "sku": "ether",
+    "name": "Ether",
+    "price": 800,
+    "description": "Restores all move PP"
+  }
+]

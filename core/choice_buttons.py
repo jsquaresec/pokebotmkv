@@ -30,6 +30,10 @@ class ChoiceButtons(OwnedView):
             async def select(interaction, selected=value):
                 async with self.lock:
                     if self.used or self.is_finished():
+                        # A duplicate click must be acknowledged, but it cannot
+                        # execute this single-use action.
+                        if not interaction.response.is_done():
+                            await interaction.response.defer(thinking=False)
                         return
                     self.used = True
                     for child in self.children:

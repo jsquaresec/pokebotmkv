@@ -194,3 +194,22 @@ async def test_encounter_loader_does_not_show_another_trainers_battle_data():
     assert 'Another trainer' in embed.description
     assert '987654' not in embed.description
     assert click.response.send_message.call_args.kwargs['ephemeral'] is True
+
+
+async def test_public_spawn_opens_dedicated_private_gui_without_thinking():
+    from datetime import datetime, timedelta
+    from types import SimpleNamespace
+    from core.wild_battle_view import SpawnLobbyView
+    source = message(ephemeral=False)
+    row = SimpleNamespace(id=77, expires_at=datetime.utcnow()+timedelta(minutes=5))
+    async def open_encounter(click, encounter_id):
+        assert encounter_id == 77
+        await gui_send(click, 'Dedicated battle GUI')
+    view = SpawnLobbyView(row, open_encounter)
+    click = interaction(user_id=9, source=source)
+    await view.children[0].callback(click)
+    click.response.defer.assert_not_awaited()
+    click.response.send_message.assert_awaited_once()
+    assert click.response.send_message.call_args.kwargs['ephemeral'] is True
+    source.edit.assert_not_awaited()
+    assert PANELS[key_for(click)].message.id != source.id

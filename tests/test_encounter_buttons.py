@@ -59,7 +59,7 @@ class EncounterButtonTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_old_buttons_cannot_consume_balls_for_new_spawn(self):
         service = object.__new__(EncounterV70Service)
-        service.repo = SimpleNamespace(active_in_channel=AsyncMock(return_value=SimpleNamespace(id=43)))
+        service.repo = SimpleNamespace(get_active=AsyncMock(return_value=None), active_in_channel=AsyncMock(return_value=SimpleNamespace(id=43)))
         users, inventory = Mock(), Mock()
         with self.assertRaisesRegex(ValueError, "ended"):
             await service.attempt_catch(1, 2, "master_ball", users, inventory, encounter_id=42)

@@ -1,4 +1,5 @@
 import asyncio
+from unittest.mock import AsyncMock, patch
 from services.shop_service import ShopService
 
 class DummyUser:
@@ -21,7 +22,8 @@ async def main():
     user = DummyUser()
     repo = DummyInventoryRepo()
     svc = ShopService(repo, "data/shop_catalog.json")
-    result = await svc.purchase(user, "poke_ball", 2)
+    with patch("services.daily_mission_service.DailyMissionService.record", new=AsyncMock()):
+        result = await svc.purchase(user, "poke_ball", 2)
     assert result["total"] == 200
     assert user.balance == 300
     print("shop service tests passed")

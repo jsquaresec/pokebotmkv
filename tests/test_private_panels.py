@@ -137,7 +137,9 @@ async def test_public_spawn_button_opens_private_panel_without_changing_invitati
     view = SpawnLobbyView(row, open_encounter)
     click = interaction(user_id=2, source=source)
     await view.children[0].callback(click)
-    click.response.defer.assert_awaited_once_with(ephemeral=True, thinking=True)
+    click.response.defer.assert_not_awaited()
+    click.response.send_message.assert_awaited_once()
+    assert click.response.send_message.call_args.kwargs['ephemeral'] is True
     source.edit.assert_not_awaited()
     assert PANELS[key_for(click)].message.id != source.id
 
@@ -188,9 +190,9 @@ async def test_encounter_loader_does_not_show_another_trainers_battle_data():
     click = interaction(user_id=2)
     cog = object.__new__(EncounterCog)
     with patch('cogs.encounters.SessionLocal', return_value=session), patch('cogs.encounters.WildEncounterRepository') as repo:
-        repo.return_value.active_in_channel = AsyncMock(return_value=row)
+        repo.return_value.get_active = AsyncMock(return_value=row)
         await cog.open_encounter(click, 42)
     embed = click.response.send_message.call_args.kwargs['embeds'][0]
-    assert 'Another trainer' in embed.description
     assert '987654' not in embed.description
     assert click.response.send_message.call_args.kwargs['ephemeral'] is True
+

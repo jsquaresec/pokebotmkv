@@ -65,7 +65,6 @@ class WildBattleView(OwnedView):
             button = discord.ui.Button(label=label[:80], row=row, disabled=disabled or ended, style=style)
 
             async def callback(interaction):
-                await gui_defer(interaction)
                 async with self.lock:
                     if self.is_finished():
                         return
@@ -133,7 +132,9 @@ class SpawnLobbyView(discord.ui.View):
         button = discord.ui.Button(label="Open private encounter", style=discord.ButtonStyle.primary)
 
         async def open_private(interaction):
-            await gui_defer(interaction)
+            # The public spawn is discovery only. Never edit it and never reuse
+            # an unrelated trainer menu: create a dedicated ephemeral battle GUI.
+            interaction.extras["gui_force_private_panel"] = True
             await open_encounter(interaction, row.id)
 
         button.callback = open_private

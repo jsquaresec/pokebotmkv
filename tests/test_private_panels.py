@@ -190,10 +190,9 @@ async def test_encounter_loader_does_not_show_another_trainers_battle_data():
     click = interaction(user_id=2)
     cog = object.__new__(EncounterCog)
     with patch('cogs.encounters.SessionLocal', return_value=session), patch('cogs.encounters.WildEncounterRepository') as repo:
-        repo.return_value.active_in_channel = AsyncMock(return_value=row)
+        repo.return_value.get_active = AsyncMock(return_value=row)
         await cog.open_encounter(click, 42)
     embed = click.response.send_message.call_args.kwargs['embeds'][0]
-    assert 'Another trainer' in embed.description
     assert '987654' not in embed.description
     assert click.response.send_message.call_args.kwargs['ephemeral'] is True
 

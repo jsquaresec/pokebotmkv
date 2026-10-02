@@ -111,7 +111,7 @@ class EncounterCog(commands.Cog):
 
     @app_commands.command(name="encounter", description="Show the active wild encounter")
     async def encounter(self, interaction: discord.Interaction):
-        await gui_defer(interaction)
+        interaction.extras["gui_force_private_panel"] = True
         await self.open_encounter(interaction)
 
     async def open_encounter(self, interaction, encounter_id=None):

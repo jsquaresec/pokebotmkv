@@ -86,7 +86,8 @@ async def run_bot() -> None:
 
     @bot.command(name="ping")
     async def ping(ctx: commands.Context):
-        await ctx.send("Pong!")
+        latency_ms = round(bot.latency * 1000)
+        await ctx.send(f"Pong! {latency_ms}ms")
 
     if not settings.discord_token:
         raise RuntimeError("DISCORD_TOKEN is missing. Set it in your .env file.")

@@ -62,15 +62,8 @@ class EncounterCog(commands.Cog):
             async with session.begin():
                 row = await WildBattleService(session).apply(
                     encounter_id, interaction.channel_id, interaction.user.id, kind, value, turn)
-        if row.status != 'open' and row.message_id:
-            # Retire the public invitation; balances and the party's HP stay private.
-            try:
-                channel = self.bot.get_channel(interaction.channel_id)
-                if channel:
-                    await channel.get_partial_message(row.message_id).edit(
-                        embed=discord.Embed(title=f"{row.species} encounter ended", description="This wild encounter is complete."), view=None)
-            except discord.HTTPException:
-                logging.getLogger(__name__).warning("Could not retire public spawn invitation", exc_info=True)
+        # A trainer finishing their private battle must not retire the public
+        # spawn; other trainers can battle the same spawn independently.
         return row
 
     @commands.Cog.listener()
@@ -126,10 +119,6 @@ class EncounterCog(commands.Cog):
             row = await WildEncounterRepository(session).active_in_channel(interaction.channel_id)
             if not row or (encounter_id is not None and row.id != encounter_id):
                 await gui_send(interaction, "There is no active encounter here.", ephemeral=True)
-                return
-            state = load_battle(row)
-            if state and state.get('owner') != interaction.user.id:
-                await gui_send(interaction, "Another trainer is already battling this spawn. Your other menus are available through Home.")
                 return
             view = self.encounter_view(row, interaction.user.id)
             message = await gui_send(interaction, 

@@ -20,8 +20,26 @@ from services.progression_v70_service import ProgressionV70Service
 WILD_WIN_GOLD_REWARD = 250
 
 
-def load_battle(row):
-    return json.loads(row.battle_state_json or "{}")
+def battle_states(row):
+    raw = json.loads(row.battle_state_json or "{}")
+    if "battles" in raw:
+        return raw["battles"]
+    if raw.get("owner") is not None:
+        return {str(raw["owner"]): raw}
+    return {}
+
+
+def load_battle(row, uid=None):
+    battles = battle_states(row)
+    if uid is not None:
+        return battles.get(str(uid), {})
+    return next(iter(battles.values()), {}) if len(battles) == 1 else {}
+
+
+def save_battle(row, uid, state):
+    battles = battle_states(row)
+    battles[str(uid)] = state
+    row.battle_state_json = json.dumps({"battles": battles})
 
 
 class WildBattleService:
@@ -44,18 +62,16 @@ class WildBattleService:
                 "stages": {}, "status": None, "moves": MovesetV80Service.load(mon)}
 
     async def start(self, row, uid):
-        state = load_battle(row)
+        state = load_battle(row, uid)
         if state and not state.get("finished"):
-            if state["owner"] != uid:
-                raise ValueError("Another trainer is battling this Pokémon.")
             return state
         user = await UserRepository(self.session).get_by_discord_id_locked(uid)
         if not user:
             raise ValueError("Use /start and set your party first.")
-        current_states = (await self.session.execute(select(WildEncounter.battle_state_json).where(
+        current_rows = (await self.session.execute(select(WildEncounter).where(
             WildEncounter.status == "open"))).scalars().all()
-        if any(s.get("owner") == uid and not s.get("finished") for s in
-               (json.loads(raw or "{}") for raw in current_states)):
+        if any((s := load_battle(encounter, uid)) and not s.get("finished") and encounter.id != row.id
+               for encounter in current_rows):
             raise ValueError("Finish your current wild battle before starting another.")
         active = (await self.session.execute(select(ActiveBattle.id).where(
             ActiveBattle.finished.is_(False), or_(ActiveBattle.player_one_discord_id == uid,
@@ -92,7 +108,7 @@ class WildBattleService:
                 "moves": [MovesetV80Service._slot(name, self.registry) for name in moves]}
         state = {"owner": uid, "owner_id": user.id, "team": team, "active": living[0], "wild": wild,
                  "turn": 1, "finished": False, "log": [f'Go, {team[living[0]]["name"]}!']}
-        row.battle_state_json = json.dumps(state)
+        save_battle(row, uid, state)
         return state
 
     async def apply(self, encounter_id, channel_id, uid, kind, value=None, expected_turn=None):
@@ -104,8 +120,8 @@ class WildBattleService:
             await self.start(row, uid)
             await self.session.flush()
             return row
-        state = load_battle(row)
-        if not state or state.get("finished") or state["owner"] != uid:
+        state = load_battle(row, uid)
+        if not state or state.get("finished"):
             raise ValueError("Only the trainer battling this Pokémon can take a turn.")
         if expected_turn is not None and state["turn"] != expected_turn:
             return row  # Re-render stale controls without spending PP or balls.
@@ -136,7 +152,7 @@ class WildBattleService:
             row.status_effect = wild.get("status")
             mon = await EncounterV70Service(self.session, self.registry, self.engine.rng).attempt_catch(
                 channel_id, uid, value, UserRepository(self.session), InventoryRepository(self.session),
-                encounter_id=encounter_id, battle_turn=True)
+                encounter_id=encounter_id, battle_turn=True, battle_state=state)
             if mon:
                 state["finished"] = True
                 state["result"] = "caught"
@@ -149,14 +165,14 @@ class WildBattleService:
             state["finished"] = True
             state["result"] = "ran"
             state["log"].append("You escaped from the wild Pokémon.")
-            row.status = "fled"
+            # Running ends only this trainer's private battle.
         else:
             raise ValueError("Unknown battle action.")
         if not state["finished"]:
             if active.get('escaped') or wild.get('escaped'):
-                state['finished'], state['result'], row.status = True, 'ran', 'fled'
+                state['finished'], state['result'] = True, 'ran'
             elif wild["hp"] <= 0:
-                state["finished"], state["result"], row.status = True, "won", "defeated"
+                state["finished"], state["result"] = True, "won"
                 state["log"].append("The wild Pokémon fainted. It can no longer be caught.")
                 user = await UserRepository(self.session).get_by_discord_id_locked(uid)
                 if user is None or user.id != state['owner_id']:
@@ -168,11 +184,11 @@ class WildBattleService:
                 state['gold_balance'] = user.balance
                 state['log'].append(f'You earned {WILD_WIN_GOLD_REWARD} gold!')
             elif not any(mon["hp"] > 0 for mon in state["team"]):
-                state["finished"], state["result"], row.status = True, "lost", "fled"
+                state["finished"], state["result"] = True, "lost"
                 state["log"].append("Your entire party fainted. Heal up before trying again.")
             elif active["hp"] <= 0:
                 state["log"].append("Choose another party Pokémon to continue.")
-        row.current_hp = wild["hp"]
+        # Wild HP is private to this trainer's battle.
         for entry in sorted(state["team"], key=lambda m: m["id"]):
             mon = (await self.session.execute(select(PokemonInstance).where(PokemonInstance.id == entry["id"]).with_for_update())).scalar_one()
             if mon.owner_id != state["owner_id"]:
@@ -190,7 +206,7 @@ class WildBattleService:
                 state["log"].append(f'{mon.species} earned {xp} XP!')
                 entry["level"], entry["hp"], entry["max_hp"] = mon.level, mon.current_hp, mon.max_hp
         state["turn"] += 1
-        row.battle_state_json = json.dumps(state)
+        save_battle(row, uid, state)
         await self.session.flush()
         return row
 
@@ -199,17 +215,19 @@ class WildBattleService:
         rows = (await session.execute(select(WildEncounter).where(
             WildEncounter.status == "open", WildEncounter.expires_at <= datetime.utcnow()).with_for_update())).scalars().all()
         for row in rows:
-            state = load_battle(row)
-            if state and not state.get("finished"):
-                for entry in sorted(state["team"], key=lambda m: m["id"]):
-                    mon = (await session.execute(select(PokemonInstance).where(PokemonInstance.id == entry["id"]).with_for_update())).scalar_one_or_none()
-                    if mon and mon.owner_id == state["owner_id"]:
-                        mon.locked = False
-                        from services.catalog_upgrade_service import CatalogUpgradeService
-                        CatalogUpgradeService().upgrade(mon)
-                state["finished"], state["result"] = True, "expired"
-                state["log"] = ["The wild Pokémon fled."]
-                row.battle_state_json = json.dumps(state)
+            battles = battle_states(row)
+            for uid, state in battles.items():
+                if state and not state.get("finished"):
+                    for entry in sorted(state["team"], key=lambda m: m["id"]):
+                        mon = (await session.execute(select(PokemonInstance).where(PokemonInstance.id == entry["id"]).with_for_update())).scalar_one_or_none()
+                        if mon and mon.owner_id == state["owner_id"]:
+                            mon.locked = False
+                            from services.catalog_upgrade_service import CatalogUpgradeService
+                            CatalogUpgradeService().upgrade(mon)
+                    state["finished"], state["result"] = True, "expired"
+                    state["log"] = ["The wild Pokémon fled."]
+                    battles[uid] = state
+            row.battle_state_json = json.dumps({"battles": battles})
             row.status = "expired"
         await session.flush()
 

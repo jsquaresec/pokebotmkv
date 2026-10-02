@@ -3,15 +3,16 @@ import logging
 import discord
 from discord import app_commands
 from discord.ext import commands
-from core.game_gui import dashboard, gui_defer, gui_send
+from core.game_gui import dashboard, gui_send
 
 
 class GuiCog(commands.Cog):
     @app_commands.command(name="menu", description="Open the PokeBot graphical dashboard")
     async def menu(self, interaction: discord.Interaction):
-        # Acknowledge immediately so Discord does not expire the interaction
-        # while the dashboard inspects the registered command tree.
-        await gui_defer(interaction)
+        # dashboard() only inspects the in-memory command tree, so respond
+        # directly. Deferring with thinking=True here can leave Discord's
+        # "Bot is thinking..." placeholder behind when an older private panel
+        # is being reused or was manually dismissed.
         await dashboard(interaction)
 
     @menu.error

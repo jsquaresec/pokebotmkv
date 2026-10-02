@@ -84,7 +84,13 @@ async def deliver(interaction, content=None, **kwargs):
         source = private_source(interaction) or extras.get('gui_original_is_panel', False)
         if source:
             if interaction.response.is_done():
-                message = await interaction.edit_original_response(content=content, **kwargs)
+                if getattr(interaction.response, 'type', None) == discord.InteractionResponseType.deferred_message_update:
+                    # Component defer(thinking=False) acknowledges an update to
+                    # interaction.message. Edit that source directly so Discord
+                    # never creates or waits on a separate thinking response.
+                    message = await interaction.message.edit(content=content, **kwargs)
+                else:
+                    message = await interaction.edit_original_response(content=content, **kwargs)
             else:
                 await interaction.response.edit_message(content=content, **kwargs)
                 message = await interaction.original_response()

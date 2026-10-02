@@ -55,7 +55,8 @@ async def test_buttons_and_deferred_actions_edit_private_source():
     await gui_defer(deferred, ephemeral=True, thinking=True)
     await gui_send(deferred, 'Purchased')
     deferred.response.defer.assert_awaited_once_with(thinking=False)
-    deferred.edit_original_response.assert_awaited_once()
+    source.edit.assert_awaited_once()
+    deferred.edit_original_response.assert_not_awaited()
     deferred.followup.send.assert_not_awaited()
 
 

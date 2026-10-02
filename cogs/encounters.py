@@ -122,7 +122,7 @@ class EncounterCog(commands.Cog):
                 return
             view = self.encounter_view(row, interaction.user.id)
             message = await gui_send(interaction, 
-                embed=battle_card(row), view=view
+                embed=battle_card(row, owner_id=interaction.user.id), view=view
             )
             view.message = message
 

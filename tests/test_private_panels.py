@@ -120,7 +120,8 @@ async def test_choice_to_receipt_uses_one_message_and_is_single_use():
     await asyncio.gather(*(button.callback(click) for click in clicks))
     action.assert_awaited_once()
     assert sum(click.response.defer.await_count for click in clicks) == 1
-    assert panel.message.edit.await_count == 1
+    # One edit disables the single-use choice; the second renders the receipt.
+    assert panel.message.edit.await_count == 2
     for click in clicks:
         click.followup.send.assert_not_awaited()
         click.response.send_message.assert_not_awaited()
@@ -187,7 +188,13 @@ async def test_encounter_loader_does_not_show_another_trainers_battle_data():
     session = MagicMock()
     session.__aenter__ = AsyncMock(return_value=session)
     session.__aexit__ = AsyncMock(return_value=False)
-    row = SimpleNamespace(id=42, battle_state_json=json.dumps({'owner':1, 'gold_balance':987654}))
+    from datetime import datetime, timedelta
+    row = SimpleNamespace(
+        id=42, species='Pikachu', level=5, current_hp=20, max_hp=20,
+        rarity='common', status='open',
+        expires_at=datetime.utcnow() + timedelta(minutes=5),
+        battle_state_json=json.dumps({'owner':1, 'gold_balance':987654}),
+    )
     click = interaction(user_id=2)
     cog = object.__new__(EncounterCog)
     with patch('cogs.encounters.SessionLocal', return_value=session), patch('cogs.encounters.WildEncounterRepository') as repo:
